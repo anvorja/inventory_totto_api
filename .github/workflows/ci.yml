@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: Lint, pruebas y migraciones
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Postgres desechable para verificar que las migraciones aplican y coinciden con los modelos.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Solo para CI: base efímera del job y clave aleatoria por ejecución (no son secretos reales).
+      DATABASE_URL: postgresql+psycopg2://ci:ci@localhost:5432/ci
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Instalar dependencias
+        run: uv sync --frozen
+
+      - name: Generar SECRET_KEY efímera
+        run: echo "SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')" >> "$GITHUB_ENV"
+
+      - name: Ruff (lint)
+        run: uv run ruff check .
+
+      - name: Ruff (formato)
+        run: uv run ruff format --check .
+
+      - name: Pruebas
+        run: uv run pytest -q
+
+      - name: Migraciones aplican desde cero
+        run: uv run alembic upgrade head
+
+      - name: Modelos y migraciones sincronizados
+        run: uv run alembic check
