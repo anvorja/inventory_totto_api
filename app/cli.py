@@ -81,6 +81,37 @@ def create_user(username: str, name: str, role: str, store_code: str | None) -> 
         print(f"  Contraseña temporal: {temporary}  (se pedirá cambiarla al ingresar)")
 
 
+def import_legacy(path: Path, store: str, name: str, closed: bool, dry_run: bool) -> None:
+    from app.models import SessionStatus
+    from app.services.legacy_import import import_legacy_count
+
+    with SessionLocal() as db:
+        try:
+            r = import_legacy_count(
+                db,
+                path,
+                store_code=store,
+                name=name,
+                status=SessionStatus.CLOSED if closed else SessionStatus.OPEN,
+            )
+        except DomainError as exc:
+            sys.exit(f"✘ {exc.message}")
+        print(f"Respaldo del {r.saved_at:%Y-%m-%d %H:%M} UTC: {r.items} referencias, {r.units} und")
+        print(f"  encontradas por EAN: {r.matched_by_ean}")
+        print(f"  EAN asociado a referencias que no lo tenían: {len(r.ean_linked)}")
+        print(f"  productos creados: {len(r.created)} {r.created}")
+        if r.conflicts:
+            print(f"  ⚠ referencias con otro EAN en el catálogo: {r.conflicts}")
+        if dry_run:
+            db.rollback()
+            print("(simulación: no se guardó nada)")
+            return
+        db.commit()
+        print(
+            f"✔ Conteo '{name}' creado (id {r.session_id}, {'cerrado' if closed else 'abierto'})."
+        )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="app.cli")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -91,7 +122,16 @@ def main() -> None:
     cu.add_argument("--name", required=True, help="Nombre completo")
     cu.add_argument("--role", choices=[r.value for r in UserRole], default=UserRole.ASESOR.value)
     cu.add_argument("--store", help="Código de tienda (p. ej. FQ95). Vacío = todas")
+    lg = sub.add_parser("import-legacy-count", help="Importa un respaldo JSON de la app anterior")
+    lg.add_argument("file", type=Path)
+    lg.add_argument("--store", required=True, help="Código de tienda, p. ej. FQ95")
+    lg.add_argument("--name", required=True, help="Nombre del conteo a crear")
+    lg.add_argument("--closed", action="store_true", help="Crear el conteo cerrado")
+    lg.add_argument("--dry-run", action="store_true", help="Solo mostrar qué haría")
     args = parser.parse_args()
+    if args.cmd == "import-legacy-count":
+        import_legacy(args.file, args.store, args.name, args.closed, args.dry_run)
+        return
     if args.cmd == "create-user":
         create_user(args.username, args.name, args.role, args.store)
         return
