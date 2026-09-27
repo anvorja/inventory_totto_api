@@ -19,6 +19,10 @@ uv run python -m app.cli import ../BarrcodeFQ95.xlsx "../data - 2026-09-26T10170
 
 Pruebas y calidad: `uv run pytest` (las de API usan SQLite en memoria, no tocan la base) · `uv run ruff check .` · `uv run ruff format .`
 
+**Integración continua** (`.github/workflows/ci.yml`): en cada PR a `develop`/`main` y en cada
+push a esas ramas corre ruff (lint y formato), pytest, `alembic upgrade head` sobre un
+Postgres efímero y `alembic check` (falla si un modelo cambió sin su migración).
+
 ## Usuarios y roles
 
 Login con usuario y contraseña (Argon2id). La sesión es un JWT en una **cookie httpOnly**
