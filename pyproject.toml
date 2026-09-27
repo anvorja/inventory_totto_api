@@ -1,0 +1,35 @@
+[project]
+name = "contador-inventario-totto-api"
+version = "0.1.0"
+description = "API de conteo de inventario para tiendas Totto"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.20.0",
+    "fastapi[standard]>=0.141.1",
+    "openpyxl>=3.1.5",
+    "psycopg2-binary>=2.9.13",
+    "pwdlib[argon2]>=0.3.1",
+    "pydantic>=2.13.5",
+    "pydantic-settings>=2.15.0",
+    "pyjwt>=2.15.0",
+    "python-multipart>=0.0.32",
+    "sqlalchemy>=2.1.1",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "ruff>=0.16.9",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["alembic"]  # código autogenerado
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
