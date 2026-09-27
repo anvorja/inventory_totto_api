@@ -53,6 +53,43 @@ Variables nuevas en `.env`: `SECRET_KEY` (≥ 32 caracteres, obligatoria) y
 distintos, sírvelos bajo el mismo sitio (p. ej. `app.midominio.com` y `api.midominio.com`)
 para que la cookie funcione en Safari/iOS.
 
+## Cuentas de desarrollo
+
+> ⚠ **Solo mientras el proyecto está en desarrollo.** Estas credenciales son públicas (el
+> repositorio es público) y dan acceso a la app desplegada con datos reales de FQ95.
+> Antes de la operación real: desactiva las cuentas de prueba desde **Usuarios**, cambia la
+> contraseña de `admin` y elimina esta sección.
+
+App: https://inventory-totto-ui.netlify.app
+
+| Usuario | Contraseña | Rol | Tienda | ¿Pide cambiar la contraseña? |
+|---|---|---|---|---|
+| `admin` | `xnfg-e3gz-m5j` | Administrador | todas | **Sí**, en el primer ingreso (es temporal) |
+| `pruebas.admin` | `Totto-brbn-6c5e` | Administrador | todas | No (cuenta fija de pruebas) |
+| `pruebas.asesor` | `Totto-tk5f-pxgz` | Asesor | FQ95 | No (cuenta fija de pruebas) |
+
+- `admin` es la cuenta real del administrador. Su contraseña `xnfg-e3gz-m5j` sigue vigente
+  hasta que alguien ingrese con ella: en ese momento la app obliga a reemplazarla y la de
+  esta tabla deja de funcionar. Usa `pruebas.admin` para pruebas y deja `admin` para el
+  responsable de la tienda.
+- `pruebas.admin` y `pruebas.asesor` se crearon con contraseña fija y sin cambio
+  obligatorio, para poder repetir pruebas. Si a una de ellas se le usa **Restablecer
+  contraseña**, recibe una temporal nueva y pierde la contraseña de esta tabla.
+
+### Cuándo se pide cambiar la contraseña
+
+| Situación | Contraseña que recibe | ¿Debe cambiarla al ingresar? |
+|---|---|---|
+| Un administrador crea el usuario (pantalla **Usuarios** o `app.cli create-user`) | Temporal generada, p. ej. `k7m2-p9xr-4tq`, se muestra **una sola vez** | **Sí**: no puede usar la app hasta cambiarla |
+| Un administrador usa **Restablecer contraseña** | Temporal nueva; se cierran sus sesiones abiertas | **Sí** |
+| La persona cambia su contraseña (menú del avatar → **Cambiar contraseña**) | La que elija (mínimo 8 caracteres) | No; se cierran sus otras sesiones |
+| Cuentas fijas de pruebas (tabla anterior) | Fija | No |
+
+Mientras la contraseña es temporal, el login funciona pero el API responde
+`403 password_change_required` a todo excepto `/auth/me`, `/auth/change-password` y
+`/auth/logout`, y la app muestra la pantalla "cambia la contraseña temporal".
+Tras 5 intentos fallidos el usuario queda bloqueado 5 minutos.
+
 ## Modelo de negocio
 
 | Tabla | Qué representa |
