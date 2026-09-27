@@ -10,6 +10,11 @@ from app.models.snapshot import StockSnapshot
 from app.models.store import Store
 
 
+class EntryKind(enum.StrEnum):
+    COUNT = "count"  # unidades encontradas al contar (± para corregir)
+    SALE = "sale"  # unidades vendidas mientras el conteo está en curso
+
+
 class SessionStatus(enum.StrEnum):
     OPEN = "open"
     CLOSED = "closed"
@@ -54,7 +59,13 @@ class CountEntry(TimestampMixin, Base):
     product_id: Mapped[int] = mapped_column(
         ForeignKey("products.id", ondelete="RESTRICT"), index=True
     )
-    quantity: Mapped[int] = mapped_column(Integer)  # positivo al contar, negativo al corregir
+    kind: Mapped[EntryKind] = mapped_column(
+        Enum(EntryKind, name="entry_kind", values_callable=lambda e: [m.value for m in e]),
+        default=EntryKind.COUNT,
+        server_default=EntryKind.COUNT.value,
+    )
+    # Conteo: positivo al contar, negativo al corregir. Venta: unidades vendidas (> 0).
+    quantity: Mapped[int] = mapped_column(Integer)
     scanned_code: Mapped[str | None] = mapped_column(String(40))
     # Quién contó: FK al usuario + nombre congelado (se conserva si el usuario se renombra).
     user_id: Mapped[int | None] = mapped_column(

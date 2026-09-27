@@ -7,7 +7,7 @@ import secrets
 os.environ["SECRET_KEY"] = secrets.token_urlsafe(48)
 
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -55,7 +55,7 @@ def seed(db: Session) -> dict:
         store=store,
         source_filename="x.xlsx",
         file_sha256="x",
-        effective_at=datetime.now(UTC),
+        effective_at=datetime.now(UTC) - timedelta(minutes=1),
         line_count=1,
         total_units=3,
     )

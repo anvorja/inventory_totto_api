@@ -118,3 +118,50 @@ def test_cannot_remove_last_admin(seed: dict) -> None:
     me = admin.get(f"{API}/auth/me").json()["id"]
     r = admin.patch(f"{API}/users/{me}", json={"role": "asesor"})
     assert r.status_code == 409
+
+
+def test_sales_flow_and_permissions(seed: dict) -> None:
+    store_id, product_id = seed["store"].id, seed["product"].id
+    admin, ana, beto = client_for("admin"), client_for("ana"), client_for("beto")
+    sid = admin.post(f"{API}/sessions", json={"storeId": store_id, "name": "X"}).json()["id"]
+
+    # Búsqueda por nombre con la situación del producto en el conteo
+    found = ana.get(f"{API}/sessions/{sid}/products", params={"q": "morr"}).json()
+    assert found[0]["product"]["id"] == product_id
+    assert (found[0]["reported"], found[0]["expected"], found[0]["counted"]) == (3, 3, 0)
+
+    # Asesora cuenta 3 y luego se vende 1: esperado y contado bajan a 2
+    assert (
+        ana.post(
+            f"{API}/sessions/{sid}/scans", json={"productId": product_id, "quantity": 3}
+        ).status_code
+        == 201
+    )
+    r = ana.post(f"{API}/sessions/{sid}/sales", json={"productId": product_id, "quantity": 1})
+    assert r.status_code == 201, r.text
+    sale = r.json()
+    assert (sale["expected"], sale["counted"], sale["sold"], sale["status"]) == (2, 2, 1, "ok")
+    assert sale["entry"]["kind"] == "sale"
+
+    s = admin.get(f"{API}/sessions/{sid}").json()
+    assert (s["countedUnits"], s["soldUnits"]) == (3, 1)
+    line = admin.get(f"{API}/sessions/{sid}/comparison").json()["lines"][0]
+    assert (line["reported"], line["sold"], line["expected"], line["counted"]) == (3, 1, 2, 2)
+    assert admin.get(f"{API}/sessions/{sid}/comparison").json()["summary"]["soldUnits"] == 1
+
+    # Otro asesor no deshace la venta ajena; la autora sí
+    assert beto.delete(f"{API}/sessions/{sid}/scans/{sale['entry']['id']}").status_code == 403
+    undo = ana.delete(f"{API}/sessions/{sid}/scans/{sale['entry']['id']}").json()
+    assert (undo["kind"], undo["expected"], undo["counted"]) == ("sale", 3, 3)
+
+    # Validaciones
+    assert (
+        ana.post(
+            f"{API}/sessions/{sid}/sales", json={"productId": product_id, "quantity": 0}
+        ).status_code
+        == 422
+    )
+    admin.patch(f"{API}/sessions/{sid}", json={"status": "closed"})
+    assert (
+        ana.post(f"{API}/sessions/{sid}/sales", json={"productId": product_id}).status_code == 409
+    )

@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from app.models import SessionStatus
+from app.models import EntryKind, SessionStatus
 from app.schemas.base import ApiModel
 from app.schemas.product import ProductOut
 from app.schemas.snapshot import SnapshotOut
@@ -35,6 +35,7 @@ class SessionOut(ApiModel):
     baseline: SnapshotOut | None
     counted_units: int
     counted_products: int
+    sold_units: int
     entries: int
     counters: list[str]
     last_activity_at: datetime | None
@@ -53,8 +54,14 @@ class ScanIn(ApiModel):
         return self
 
 
+class SaleIn(ApiModel):
+    product_id: int
+    quantity: int = Field(default=1, ge=1, le=999)
+
+
 class EntryOut(ApiModel):
     id: int
+    kind: EntryKind
     product: ProductOut
     quantity: int
     scanned_code: str | None
@@ -73,11 +80,26 @@ class ScanOut(ApiModel):
     counted: int
     expected: int
     in_baseline: bool
+    sold: int
     status: ScanStatus
 
 
 class UndoOut(ApiModel):
     product: ProductOut
+    kind: EntryKind
+    counted: int
+    expected: int
+    sold: int
+
+
+class ProductStockOut(ApiModel):
+    """Producto con su situación en el conteo (para registrar ventas)."""
+
+    product: ProductOut
+    in_report: bool
+    reported: int
+    sold: int
+    expected: int
     counted: int
 
 
@@ -89,6 +111,8 @@ class ComparisonLineOut(ApiModel):
     business_unit: str | None
     size: str | None
     color_name: str | None
+    reported: int
+    sold: int
     expected: int
     counted: int
     difference: int
@@ -108,6 +132,7 @@ class ComparisonSummaryOut(ApiModel):
     progress: float
     expected_lines: int
     lines_without_ean: int
+    sold_units: int
     buckets: dict[LineStatus, BucketOut]
 
 

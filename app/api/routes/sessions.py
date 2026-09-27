@@ -12,6 +12,8 @@ from app.schemas.session import (
     ComparisonOut,
     ComparisonSummaryOut,
     EntryOut,
+    ProductStockOut,
+    SaleIn,
     ScanIn,
     ScanOut,
     SessionCreate,
@@ -21,8 +23,9 @@ from app.schemas.session import (
 )
 from app.schemas.snapshot import SnapshotOut
 from app.schemas.store import StoreOut
-from app.services import comparison, counting, export
+from app.services import catalog, comparison, counting, export
 from app.services.access import ensure_store_access
+from app.services.reconcile import load_states
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -41,6 +44,7 @@ def session_out(db: Session, session: CountSession) -> SessionOut:
         baseline=SnapshotOut.model_validate(baseline) if baseline else None,
         counted_units=stats.counted_units,
         counted_products=stats.counted_products,
+        sold_units=stats.sold_units,
         entries=stats.entries,
         counters=stats.counters,
         last_activity_at=stats.last_activity_at,
@@ -121,14 +125,58 @@ def scan(session_id: int, body: ScanIn, db: DbSession, user: CurrentUser) -> Sca
         zone=body.zone,
     )
     db.commit()
+    return _scan_out(outcome)
+
+
+def _scan_out(outcome: counting.ScanOutcome) -> ScanOut:
     return ScanOut(
         entry=EntryOut.model_validate(outcome.entry),
         product=ProductOut.model_validate(outcome.product),
         counted=outcome.counted,
         expected=outcome.expected,
         in_baseline=outcome.in_baseline,
+        sold=outcome.sold,
         status=comparison.classify(outcome.expected, outcome.counted, outcome.in_baseline).value,
     )
+
+
+@router.post("/{session_id}/sales", response_model=ScanOut, status_code=status.HTTP_201_CREATED)
+def register_sale(session_id: int, body: SaleIn, db: DbSession, user: CurrentUser) -> ScanOut:
+    """Registra unidades vendidas durante el conteo (asesores y administradores)."""
+    _session_for(db, user, session_id)
+    outcome = counting.record_sale(
+        db, session_id, product_id=body.product_id, quantity=body.quantity, user=user
+    )
+    db.commit()
+    return _scan_out(outcome)
+
+
+@router.get("/{session_id}/products", response_model=list[ProductStockOut])
+def search_session_products(
+    session_id: int, db: DbSession, user: CurrentUser, q: str = "", limit: int = 20
+) -> list[ProductStockOut]:
+    """Busca productos por nombre, referencia o EAN con su situación en este conteo."""
+    session = _session_for(db, user, session_id)
+    products = catalog.search_products(db, q, min(limit, 50))
+    if not products:
+        return []
+    states = load_states(
+        db, session.id, counting.resolve_baseline(db, session), [p.id for p in products]
+    )
+    items = [
+        ProductStockOut(
+            product=ProductOut.model_validate(p),
+            in_report=states[p.id].in_report,
+            reported=states[p.id].reported,
+            sold=states[p.id].sold,
+            expected=states[p.id].expected,
+            counted=states[p.id].counted,
+        )
+        for p in products
+    ]
+    # Primero lo que la tienda tiene (según el reporte o lo contado).
+    items.sort(key=lambda i: (not (i.in_report or i.counted), i.product.name))
+    return items
 
 
 @router.get("/{session_id}/scans", response_model=list[EntryOut])
@@ -144,9 +192,15 @@ def recent_scans(
 @router.delete("/{session_id}/scans/{entry_id}", response_model=UndoOut)
 def undo_scan(session_id: int, entry_id: int, db: DbSession, user: CurrentUser) -> UndoOut:
     _session_for(db, user, session_id)
-    product, counted = counting.undo_entry(db, session_id, entry_id, user)
+    product, kind, state = counting.undo_entry(db, session_id, entry_id, user)
     db.commit()
-    return UndoOut(product=ProductOut.model_validate(product), counted=counted)
+    return UndoOut(
+        product=ProductOut.model_validate(product),
+        kind=kind,
+        counted=state.counted,
+        expected=state.expected,
+        sold=state.sold,
+    )
 
 
 @router.get("/{session_id}/comparison", response_model=ComparisonOut)
