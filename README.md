@@ -94,6 +94,35 @@ Mientras la contraseña es temporal, el login funciona pero el API responde
 `/auth/logout`, y la app muestra la pantalla "cambia la contraseña temporal".
 Tras 5 intentos fallidos el usuario queda bloqueado 5 minutos.
 
+## Ventas durante el conteo
+
+La tienda cuenta con las puertas abiertas y el reporte de existencias se actualiza tarde.
+Por eso, durante un conteo, asesores y administradores registran lo que venden
+(`POST /sessions/{id}/sales`, buscando el producto por nombre con
+`GET /sessions/{id}/products?q=`). Cada venta se concilia así (`app/services/reconcile.py`):
+
+| La venta ocurrió… | Esperado | Contado |
+|---|---|---|
+| después del reporte y **antes** de contar el producto | − unidades vendidas | sin cambio (ya no estaba al contar) |
+| después del reporte y **después** de contarlo | − unidades vendidas | − unidades vendidas |
+| **antes** de la hora del reporte | sin cambio (el reporte ya la incluye) | − si ya se había contado |
+
+Subir un reporte nuevo es opcional: las ventas anteriores a su hora dejan de descontarse
+solas, así que nunca se descuentan dos veces. Si se contó solo parte de un producto, se
+asume que lo vendido salió de lo ya contado. Deshacer una venta usa el mismo endpoint que
+deshacer una lectura (`DELETE /sessions/{id}/scans/{entryId}`).
+
+## Importar un conteo de la app anterior
+
+```bash
+uv run python -m app.cli import-legacy-count ../respaldo-conteo-2026-09-26.json \
+  --store FQ95 --name "Conteo FQ95 (continúa conteo manual del 26-sep)" --dry-run
+```
+
+Crea un conteo (abierto por defecto; `--closed` para cerrarlo) con las lecturas fechadas a
+la hora del respaldo. Asocia el EAN a las referencias que no lo tenían, crea los productos
+que no existan y se niega a importar dos veces el mismo conteo. Sin `--dry-run` guarda.
+
 ## Modelo de negocio
 
 | Tabla | Qué representa |
@@ -102,7 +131,7 @@ Tras 5 intentos fallidos el usuario queda bloqueado 5 minutos.
 | `products` | Catálogo unificado. `reference` = *Código Producto Largo*; `ean` = código de barras de la etiqueta (lo que se escanea). |
 | `stock_snapshots` / `_lines` | Cada carga del reporte de existencias ("lo que debería haber"). Es versionado porque el reporte cambia ~2 veces al día. |
 | `count_sessions` | Una jornada de conteo en una tienda. Se compara contra un snapshot fijo o, por defecto, contra el más reciente. |
-| `count_entries` | Eventos de conteo (append-only, con cantidad ±). Permiten varios celulares a la vez, deshacer y auditoría (usuario, zona, hora). |
+| `count_entries` | Eventos del conteo (append-only): lecturas (`count`, cantidad ±) y ventas registradas (`sale`). Permiten varios celulares a la vez, deshacer y auditoría (usuario, zona, hora). |
 | `users` | Personas con acceso: rol (`asesor` / `administrador`), tienda asignada opcional. |
 
 **Convención de columnas del maestro de códigos:** `BARCODE` = EAN-13 impreso en la
@@ -124,6 +153,7 @@ cosa que la app permite hacer al escanear una etiqueta desconocida.
 - `POST /imports` — sube un `.xlsx` (existencias o maestro de códigos; `kind` y `effectiveAt` opcionales).
 - `GET /stores`, `GET /stores/{id}/snapshots`, `GET /stores/{id}/sessions`
 - `POST /sessions`, `GET|PATCH|DELETE /sessions/{id}`
+- `POST /sessions/{id}/sales` — `{productId, quantity}` venta durante el conteo · `GET /sessions/{id}/products?q=` búsqueda con existencias
 - `POST /sessions/{id}/scans` — `{code | productId, quantity, countedBy, zone}`; 404 `product_not_found` si el código no existe.
 - `GET /sessions/{id}/scans`, `DELETE /sessions/{id}/scans/{entryId}` (deshacer)
 - `GET /sessions/{id}/comparison?snapshotId=`, `GET /sessions/{id}/export` (Excel)
