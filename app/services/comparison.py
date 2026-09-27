@@ -5,11 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import CountEntry, Product, StockSnapshot
-from app.models import StockSnapshotLine as Line
+from app.models import Product, StockSnapshot
+from app.services.reconcile import load_states
 
 
 class LineStatus(StrEnum):
@@ -28,9 +28,15 @@ class ComparisonLine:
     business_unit: str | None
     size: str | None
     color_name: str | None
-    expected: int
-    counted: int
+    expected: int  # esperado ahora: reporte − ventas registradas después del reporte
+    counted: int  # contado que sigue en tienda (descontando ventas posteriores al conteo)
     status: LineStatus
+    reported: int | None = None  # lo que dice el reporte de existencias
+    sold: int = 0  # ventas registradas después de la hora del reporte
+
+    def __post_init__(self) -> None:
+        if self.reported is None:
+            self.reported = self.expected
 
     @property
     def difference(self) -> int:
@@ -53,6 +59,7 @@ class ComparisonSummary:
     expected_lines: int
     lines_without_ean: int
     buckets: dict[LineStatus, StatusBucket] = field(default_factory=dict)
+    sold_units: int = 0  # vendidas durante el conteo (ya descontadas de lo esperado)
 
 
 def classify(expected: int, counted: int, in_snapshot: bool) -> LineStatus:
@@ -66,31 +73,18 @@ def classify(expected: int, counted: int, in_snapshot: bool) -> LineStatus:
 def build_comparison(
     db: Session, session_id: int, snapshot: StockSnapshot | None
 ) -> tuple[ComparisonSummary, list[ComparisonLine]]:
-    counted_rows = db.execute(
-        select(CountEntry.product_id, func.sum(CountEntry.quantity))
-        .where(CountEntry.session_id == session_id)
-        .group_by(CountEntry.product_id)
-    ).all()
-    counted = {pid: int(n) for pid, n in counted_rows if n}
-
-    expected: dict[int, int] = {}
-    if snapshot is not None:
-        expected = dict(
-            db.execute(
-                select(Line.product_id, Line.quantity).where(Line.snapshot_id == snapshot.id)
-            ).all()
-        )
-
-    ids = expected.keys() | counted.keys()
+    states = load_states(db, session_id, snapshot)
+    # Un producto fuera del reporte que ya no está en tienda no aporta nada a comparar.
+    states = {pid: st for pid, st in states.items() if st.in_report or st.counted > 0}
     products = (
-        {p.id: p for p in db.scalars(select(Product).where(Product.id.in_(ids)))} if ids else {}
+        {p.id: p for p in db.scalars(select(Product).where(Product.id.in_(states)))}
+        if states
+        else {}
     )
 
     lines: list[ComparisonLine] = []
-    for pid in ids:
+    for pid, st in states.items():
         p = products[pid]
-        exp = expected.get(pid, 0)
-        cnt = counted.get(pid, 0)
         lines.append(
             ComparisonLine(
                 product_id=pid,
@@ -100,9 +94,11 @@ def build_comparison(
                 business_unit=p.business_unit,
                 size=p.size,
                 color_name=p.color_name,
-                expected=exp,
-                counted=cnt,
-                status=classify(exp, cnt, pid in expected),
+                expected=st.expected,
+                counted=st.counted,
+                status=classify(st.expected, st.counted, st.in_report),
+                reported=st.reported,
+                sold=st.sold,
             )
         )
     lines.sort(key=lambda line: (-abs(line.difference), line.name, line.reference or ""))
@@ -111,8 +107,9 @@ def build_comparison(
 
 def summarize(lines: list[ComparisonLine]) -> ComparisonSummary:
     buckets = {status: StatusBucket() for status in LineStatus}
-    expected_units = counted_units = matched = expected_lines = touched = no_ean = 0
+    expected_units = counted_units = matched = expected_lines = touched = no_ean = sold = 0
     for line in lines:
+        sold += line.sold
         bucket = buckets[line.status]
         bucket.lines += 1
         bucket.units += abs(line.difference) if line.status != LineStatus.OK else line.counted
@@ -134,4 +131,5 @@ def summarize(lines: list[ComparisonLine]) -> ComparisonSummary:
         expected_lines=expected_lines,
         lines_without_ean=no_ean,
         buckets=buckets,
+        sold_units=sold,
     )
