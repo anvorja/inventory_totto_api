@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
@@ -26,6 +26,8 @@ class User(TimestampMixin, Base):
     # NULL = acceso a todas las tiendas. Con valor, solo ve y opera esa tienda.
     store_id: Mapped[int | None] = mapped_column(ForeignKey("stores.id", ondelete="RESTRICT"))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Permiso que el administrador concede a un asesor para corregir códigos de barras.
+    can_edit_barcodes: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     # Contraseñas temporales (creadas o restablecidas por un admin) obligan a cambiarla.
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=True)
     # Se incrementa al cambiar/restablecer contraseña o desactivar: invalida sesiones abiertas.
@@ -39,3 +41,8 @@ class User(TimestampMixin, Base):
     @property
     def is_admin(self) -> bool:
         return self.role == UserRole.ADMIN
+
+    @property
+    def may_edit_barcodes(self) -> bool:
+        """Los administradores siempre pueden; un asesor, solo si se lo concedieron."""
+        return self.is_admin or self.can_edit_barcodes

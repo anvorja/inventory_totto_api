@@ -14,6 +14,7 @@ class UserOut(ApiModel):
     role: UserRole
     store: StoreOut | None
     is_active: bool
+    can_edit_barcodes: bool
     must_change_password: bool
     last_login_at: datetime | None
     created_at: datetime
@@ -41,6 +42,7 @@ class UserUpdate(ApiModel):
     role: UserRole | None = None
     store_id: int | None = None
     is_active: bool | None = None
+    can_edit_barcodes: bool | None = None
 
 
 class UserWithPasswordOut(ApiModel):

@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, String, func
+from sqlalchemy import DateTime, Enum, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
@@ -36,3 +36,24 @@ class Product(TimestampMixin, Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class BarcodeChange(TimestampMixin, Base):
+    """Historial de correcciones de código de barras hechas desde la app.
+
+    Guarda quién, cuándo y de qué a qué. Las lecturas guardan `product_id`, así que corregir
+    un EAN no altera conteos ya hechos; el historial permite rastrear y revertir una
+    corrección equivocada.
+    """
+
+    __tablename__ = "barcode_changes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    product_id: Mapped[int] = mapped_column(
+        ForeignKey("products.id", ondelete="CASCADE"), index=True
+    )
+    old_ean: Mapped[str | None] = mapped_column(String(14))
+    new_ean: Mapped[str] = mapped_column(String(14))
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    # Nombre congelado: se conserva aunque el usuario se renombre o se elimine.
+    changed_by: Mapped[str] = mapped_column(String(80))

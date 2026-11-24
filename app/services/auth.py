@@ -141,6 +141,7 @@ def update_user(
     role: UserRole | None,
     store_id: int | None,
     is_active: bool | None,
+    can_edit_barcodes: bool | None = None,
 ) -> User:
     loses_admin = (
         user.is_admin
@@ -168,6 +169,8 @@ def update_user(
         if not is_active:
             user.token_version += 1  # cierra sus sesiones abiertas
         user.is_active = is_active
+    if "can_edit_barcodes" in fields and can_edit_barcodes is not None:
+        user.can_edit_barcodes = can_edit_barcodes
     db.flush()
     return user
 

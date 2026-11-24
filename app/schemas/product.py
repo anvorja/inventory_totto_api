@@ -20,3 +20,7 @@ class ProductCreate(ApiModel):
     ean: str | None = Field(default=None, max_length=14)
     reference: str | None = Field(default=None, max_length=40)
     name: str | None = Field(default=None, max_length=200)
+
+
+class ProductEanUpdate(ApiModel):
+    ean: str = Field(min_length=1, max_length=20)

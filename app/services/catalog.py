@@ -5,9 +5,14 @@ from dataclasses import dataclass
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.models import Product, ProductSource
-from app.services.errors import ConflictError
+from app.models import BarcodeChange, Product, ProductSource, User
+from app.services.errors import ConflictError, DomainError, ForbiddenError
 from app.services.xlsx_parser import CatalogLine, clean_ean, clean_reference
+
+
+def ean_variants(ean: str) -> set[str]:
+    """Un lector puede entregar UPC-A (12) o EAN-13 con/sin cero inicial: son el mismo código."""
+    return {ean, ean.zfill(13), ean.lstrip("0")}
 
 
 def find_by_code(db: Session, raw_code: str) -> Product | None:
@@ -15,9 +20,7 @@ def find_by_code(db: Session, raw_code: str) -> Product | None:
     code = raw_code.strip()
     ean = clean_ean(code)
     if ean:
-        # Un lector puede entregar UPC-A (12) o EAN-13 con/sin cero inicial.
-        candidates = {ean, ean.zfill(13), ean.lstrip("0")}
-        return db.scalars(select(Product).where(Product.ean.in_(candidates))).first()
+        return db.scalars(select(Product).where(Product.ean.in_(ean_variants(ean)))).first()
     reference = clean_reference(code)
     if not reference:
         return None
@@ -139,5 +142,38 @@ def register_product(
         raise ConflictError("Escribe el nombre del producto para registrarlo.")
     product = Product(ean=ean, reference=reference, name=name.strip(), source=ProductSource.MANUAL)
     db.add(product)
+    db.flush()
+    return product
+
+
+def change_ean(db: Session, product: Product, raw_ean: str, actor: User) -> Product:
+    """Corrige el código de barras de un producto y deja constancia en el historial."""
+    if not actor.may_edit_barcodes:
+        raise ForbiddenError(
+            "No tienes permiso para editar códigos de barras. Pídeselo a un administrador."
+        )
+    ean = clean_ean(raw_ean)
+    if not ean:
+        raise DomainError("El código de barras debe tener entre 8 y 14 dígitos, sin letras.")
+    if ean == product.ean:
+        return product
+    taken = db.scalars(
+        select(Product).where(Product.ean.in_(ean_variants(ean)), Product.id != product.id)
+    ).first()
+    if taken is not None:
+        label = f"{taken.name} ({taken.reference})" if taken.reference else taken.name
+        raise ConflictError(
+            f"Ese código de barras ya es de otro producto: {label}.", product_id=taken.id
+        )
+    db.add(
+        BarcodeChange(
+            product_id=product.id,
+            old_ean=product.ean,
+            new_ean=ean,
+            user_id=actor.id,
+            changed_by=actor.full_name,
+        )
+    )
+    product.ean = ean
     db.flush()
     return product
