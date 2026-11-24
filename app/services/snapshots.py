@@ -89,6 +89,8 @@ def import_stock(
             # El reporte de existencias es la fuente más fresca de atributos del producto.
             # Solo se asigna lo que cambia para no generar UPDATE innecesarios.
             for attr in ("name", "business_unit", "size", "color_code", "color_name"):
+                if attr == "name" and product.name_locked:
+                    continue  # un administrador lo corrigió a mano
                 value = getattr(line, attr)
                 if value and getattr(product, attr) != value:
                     setattr(product, attr, value)

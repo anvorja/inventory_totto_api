@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.models import BarcodeChange, Product, ProductSource, User
+from app.models import BarcodeChange, Product, ProductNameChange, ProductSource, User
 from app.services.errors import ConflictError, DomainError, ForbiddenError
 from app.services.xlsx_parser import CatalogLine, clean_ean, clean_reference
 
@@ -175,5 +175,29 @@ def change_ean(db: Session, product: Product, raw_ean: str, actor: User) -> Prod
         )
     )
     product.ean = ean
+    db.flush()
+    return product
+
+
+def rename_product(db: Session, product: Product, raw_name: str, actor: User) -> Product:
+    """Corrige el nombre de un producto (solo administradores) y lo fija frente a las cargas."""
+    if not actor.is_admin:
+        raise ForbiddenError("Solo un administrador puede editar el nombre de un producto.")
+    name = " ".join(raw_name.split())
+    if len(name) < 2:
+        raise DomainError("Escribe el nombre del producto (al menos 2 caracteres).")
+    if name == product.name:
+        return product
+    db.add(
+        ProductNameChange(
+            product_id=product.id,
+            old_name=product.name,
+            new_name=name,
+            user_id=actor.id,
+            changed_by=actor.full_name,
+        )
+    )
+    product.name = name
+    product.name_locked = True
     db.flush()
     return product

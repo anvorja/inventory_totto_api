@@ -34,6 +34,7 @@ Login con usuario y contraseña (Argon2id). La sesión es un JWT en una **cookie
 | Contar (escanear, ±1, registrar/asociar códigos) | ✔ | ✔ |
 | Deshacer lecturas | solo las suyas | todas |
 | Corregir el código de barras de un producto | si el admin le da permiso | ✔ |
+| Editar el nombre de un producto | | ✔ |
 | Ver conteos y diferencias, buscar en catálogo | ✔ | ✔ |
 | Crear, renombrar, cerrar, reabrir y eliminar conteos | | ✔ |
 | Elegir existencias de comparación, exportar Excel | | ✔ |
@@ -49,6 +50,10 @@ menos un administrador activo.
 Corregir un código de barras (`PATCH /products/{id}/ean`) queda registrado en
 `barcode_changes` (código anterior, nuevo, quién y cuándo). Las lecturas ya hechas no cambian,
 porque se guardan por producto, y volver a importar el maestro de códigos no deshace la corrección.
+
+Editar el nombre (`PATCH /products/{id}/name`) queda en `product_name_changes` y **fija** el
+nombre (`name_locked`): las cargas de existencias siguen actualizando talla, color, etc., pero ya
+no lo sobrescriben.
 
 Crear el primer administrador (o cualquier usuario) desde la terminal:
 
