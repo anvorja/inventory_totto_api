@@ -33,6 +33,7 @@ Login con usuario y contraseña (Argon2id). La sesión es un JWT en una **cookie
 |---|:-:|:-:|
 | Contar (escanear, ±1, registrar/asociar códigos) | ✔ | ✔ |
 | Deshacer lecturas | solo las suyas | todas |
+| Corregir el código de barras de un producto | si el admin le da permiso | ✔ |
 | Ver conteos y diferencias, buscar en catálogo | ✔ | ✔ |
 | Crear, renombrar, cerrar, reabrir y eliminar conteos | | ✔ |
 | Elegir existencias de comparación, exportar Excel | | ✔ |
@@ -44,6 +45,10 @@ solo gestiona usuarios de su tienda). Sin tienda = todas. Los usuarios nuevos o
 restablecidos reciben una **contraseña temporal** que deben cambiar al ingresar; cambiarla,
 restablecerla o desactivar al usuario cierra sus demás sesiones. Siempre debe quedar al
 menos un administrador activo.
+
+Corregir un código de barras (`PATCH /products/{id}/ean`) queda registrado en
+`barcode_changes` (código anterior, nuevo, quién y cuándo). Las lecturas ya hechas no cambian,
+porque se guardan por producto, y volver a importar el maestro de códigos no deshace la corrección.
 
 Crear el primer administrador (o cualquier usuario) desde la terminal:
 

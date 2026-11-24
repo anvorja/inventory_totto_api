@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.api.deps import CurrentUser, DbSession
 from app.models import Product
-from app.schemas.product import ProductCreate, ProductOut
+from app.schemas.product import ProductCreate, ProductEanUpdate, ProductOut
 from app.services import catalog
 
 router = APIRouter(prefix="/products", tags=["products"])
@@ -24,5 +24,17 @@ def lookup(code: str, db: DbSession, _: CurrentUser) -> Product:
 @router.post("", response_model=ProductOut, status_code=status.HTTP_201_CREATED)
 def register(body: ProductCreate, db: DbSession, _: CurrentUser) -> Product:
     product = catalog.register_product(db, ean=body.ean, reference=body.reference, name=body.name)
+    db.commit()
+    return product
+
+
+@router.patch("/{product_id}/ean", response_model=ProductOut)
+def change_ean(
+    product_id: int, body: ProductEanUpdate, db: DbSession, user: CurrentUser
+) -> Product:
+    product = db.get(Product, product_id)
+    if product is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "El producto no existe.")
+    catalog.change_ean(db, product, body.ean, user)
     db.commit()
     return product

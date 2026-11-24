@@ -62,6 +62,7 @@ def update_user(user_id: int, body: UserUpdate, db: DbSession, admin: AdminUser)
         role=body.role,
         store_id=store_id,
         is_active=body.is_active,
+        can_edit_barcodes=body.can_edit_barcodes,
     )
     db.commit()
     return user
