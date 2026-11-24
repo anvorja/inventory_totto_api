@@ -14,7 +14,7 @@ uv run fastapi dev app/main.py  # http://localhost:8000/docs
 Cargar Excel desde la terminal (el tipo se detecta solo):
 
 ```bash
-uv run python -m app.cli import ../BarrcodeFQ95.xlsx "../data - 2026-09-26T101702.972.xlsx"
+uv run python -m app.cli import ../entradas/BarrcodeFQ95.xlsx "../entradas/data - 2026-09-26T101702.972.xlsx"
 ```
 
 Pruebas y calidad: `uv run pytest` (las de API usan SQLite en memoria, no tocan la base) · `uv run ruff check .` · `uv run ruff format .`
@@ -120,7 +120,7 @@ deshacer una lectura (`DELETE /sessions/{id}/scans/{entryId}`).
 ## Importar un conteo de la app anterior
 
 ```bash
-uv run python -m app.cli import-legacy-count ../respaldo-conteo-2026-09-26.json \
+uv run python -m app.cli import-legacy-count ../archivo/conteo-manual-FQ95-2026-09-26.json \
   --store FQ95 --name "Conteo FQ95 (continúa conteo manual del 26-sep)" --dry-run
 ```
 
