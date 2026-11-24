@@ -14,7 +14,7 @@ from app.services.xlsx_parser import (
     to_int,
 )
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[2] / "entradas"
 STOCK_FILE = ROOT / "data - 2026-09-26T101702.972.xlsx"
 CATALOG_FILE = ROOT / "BarrcodeFQ95.xlsx"
 
