@@ -5,9 +5,11 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 
 from app.api.deps import AdminUser, DbSession
 from app.core.config import get_settings
+from app.schemas.product import ProductOut
 from app.schemas.snapshot import (
     CatalogImportOut,
     ImportOut,
+    NameConflictOut,
     SnapshotImportOut,
     SnapshotOut,
 )
@@ -71,6 +73,14 @@ async def import_xlsx(
                     )
                     for r in results
                 ],
+                name_conflicts=[
+                    NameConflictOut(
+                        product=ProductOut.model_validate(c.product), excel_name=c.excel_name
+                    )
+                    for r in results
+                    for c in r.name_conflicts
+                ],
+                names_released=sum(r.names_released for r in results),
             )
         parsed_catalog = parse_catalog(rows)
         stats = catalog.import_catalog(db, parsed_catalog.lines)

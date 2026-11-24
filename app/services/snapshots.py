@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -33,11 +33,22 @@ def latest_snapshot(db: Session, store_id: int) -> StockSnapshot | None:
 
 
 @dataclass
+class NameConflict:
+    """Producto con nombre corregido en la app que el Excel trae distinto."""
+
+    product: Product
+    excel_name: str
+
+
+@dataclass
 class SnapshotImportResult:
     snapshot: StockSnapshot
     duplicate: bool
     new_products: int
     lines_without_ean: int
+    name_conflicts: list[NameConflict] = field(default_factory=list)
+    # Nombres corregidos que el Excel ya trae igual: se liberan (vuelven a seguir al Excel).
+    names_released: int = 0
 
 
 def import_stock(
@@ -52,6 +63,8 @@ def import_stock(
     effective_at = effective_at or datetime.now(UTC)
     products = {p.reference: p for p in db.scalars(select(Product)) if p.reference}
     results: list[SnapshotImportResult] = []
+    # Un producto puede venir en varias tiendas del mismo archivo: se avisa una sola vez.
+    conflict_ids: set[int] = set()
 
     for store_stock in stores:
         store = get_or_create_store(db, store_stock.code, store_stock.name)
@@ -66,6 +79,8 @@ def import_stock(
 
         new_products = 0
         lines_without_ean = 0
+        name_conflicts: list[NameConflict] = []
+        names_released = 0
         snapshot = StockSnapshot(
             store=store,
             source_filename=filename[:255],
@@ -81,6 +96,7 @@ def import_stock(
                 product = Product(
                     reference=line.reference,
                     name=line.name or line.reference,
+                    source_name=line.name,
                     source=ProductSource.STOCK,
                 )
                 db.add(product)
@@ -88,7 +104,19 @@ def import_stock(
                 new_products += 1
             # El reporte de existencias es la fuente más fresca de atributos del producto.
             # Solo se asigna lo que cambia para no generar UPDATE innecesarios.
+            if line.name:
+                if product.source_name != line.name:
+                    product.source_name = line.name
+                if product.name_locked:
+                    if line.name == product.name:
+                        product.name_locked = False  # el sistema ya trae el nombre corregido
+                        names_released += 1
+                    elif product.id not in conflict_ids:
+                        conflict_ids.add(product.id)
+                        name_conflicts.append(NameConflict(product, line.name))
             for attr in ("name", "business_unit", "size", "color_code", "color_name"):
+                if attr == "name" and product.name_locked:
+                    continue  # un administrador lo corrigió a mano: se avisa, no se pisa
                 value = getattr(line, attr)
                 if value and getattr(product, attr) != value:
                     setattr(product, attr, value)
@@ -96,5 +124,14 @@ def import_stock(
                 lines_without_ean += 1
             snapshot.lines.append(StockSnapshotLine(product=product, quantity=line.quantity))
         db.flush()
-        results.append(SnapshotImportResult(snapshot, False, new_products, lines_without_ean))
+        results.append(
+            SnapshotImportResult(
+                snapshot,
+                False,
+                new_products,
+                lines_without_ean,
+                name_conflicts=name_conflicts,
+                names_released=names_released,
+            )
+        )
     return results

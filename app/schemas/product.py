@@ -9,6 +9,9 @@ class ProductOut(ApiModel):
     reference: str | None
     ean: str | None
     name: str
+    name_locked: bool
+    # Último nombre que trajo el Excel; difiere de `name` cuando el admin lo corrigió.
+    source_name: str | None
     business_unit: str | None
     size: str | None
     color_code: str | None
@@ -24,3 +27,7 @@ class ProductCreate(ApiModel):
 
 class ProductEanUpdate(ApiModel):
     ean: str = Field(min_length=1, max_length=20)
+
+
+class ProductNameUpdate(ApiModel):
+    name: str = Field(min_length=1, max_length=200)

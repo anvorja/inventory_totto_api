@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, false, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
@@ -26,6 +26,11 @@ class Product(TimestampMixin, Base):
     reference: Mapped[str | None] = mapped_column(String(40), unique=True)
     ean: Mapped[str | None] = mapped_column(String(14), unique=True)
     name: Mapped[str] = mapped_column(String(200))
+    # True cuando un administrador corrigió el nombre: las cargas de Excel ya no lo sobrescriben.
+    name_locked: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    # Último nombre que trajo el Excel ("el nombre del sistema"). Permite comparar con el
+    # nombre corregido en la app y avisar cuando difieren.
+    source_name: Mapped[str | None] = mapped_column(String(200))
     business_unit: Mapped[str | None] = mapped_column(String(60))
     size: Mapped[str | None] = mapped_column(String(20))
     color_code: Mapped[str | None] = mapped_column(String(20))
@@ -56,4 +61,19 @@ class BarcodeChange(TimestampMixin, Base):
     new_ean: Mapped[str] = mapped_column(String(14))
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     # Nombre congelado: se conserva aunque el usuario se renombre o se elimine.
+    changed_by: Mapped[str] = mapped_column(String(80))
+
+
+class ProductNameChange(TimestampMixin, Base):
+    """Historial de nombres corregidos por un administrador (quién, cuándo, de qué a qué)."""
+
+    __tablename__ = "product_name_changes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    product_id: Mapped[int] = mapped_column(
+        ForeignKey("products.id", ondelete="CASCADE"), index=True
+    )
+    old_name: Mapped[str] = mapped_column(String(200))
+    new_name: Mapped[str] = mapped_column(String(200))
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     changed_by: Mapped[str] = mapped_column(String(80))

@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from app.schemas.base import ApiModel
+from app.schemas.product import ProductOut
 from app.schemas.store import StoreOut
 
 
@@ -12,6 +13,13 @@ class SnapshotOut(ApiModel):
     created_at: datetime
     line_count: int
     total_units: int
+
+
+class NameConflictOut(ApiModel):
+    """Nombre corregido en la app que el Excel trae distinto (se mantuvo el de la app)."""
+
+    product: ProductOut
+    excel_name: str
 
 
 class SnapshotImportOut(ApiModel):
@@ -35,4 +43,6 @@ class ImportOut(ApiModel):
     kind: str
     skipped_rows: int
     snapshots: list[SnapshotImportOut] = []
+    name_conflicts: list[NameConflictOut] = []
+    names_released: int = 0
     catalog: CatalogImportOut | None = None
