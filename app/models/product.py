@@ -28,6 +28,9 @@ class Product(TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(200))
     # True cuando un administrador corrigió el nombre: las cargas de Excel ya no lo sobrescriben.
     name_locked: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    # Último nombre que trajo el Excel ("el nombre del sistema"). Permite comparar con el
+    # nombre corregido en la app y avisar cuando difieren.
+    source_name: Mapped[str | None] = mapped_column(String(200))
     business_unit: Mapped[str | None] = mapped_column(String(60))
     size: Mapped[str | None] = mapped_column(String(20))
     color_code: Mapped[str | None] = mapped_column(String(20))

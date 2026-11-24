@@ -71,6 +71,7 @@ def import_catalog(db: Session, lines: list[CatalogLine]) -> CatalogImportStats:
                 ean=line.ean,
                 reference=line.reference,
                 name=line.name or line.reference or line.ean,
+                source_name=line.name,
                 source=ProductSource.CATALOG,
             )
             db.add(product)
@@ -95,6 +96,8 @@ def import_catalog(db: Session, lines: list[CatalogLine]) -> CatalogImportStats:
         if line.name and not product.name:
             product.name = line.name
             changed = True
+        if line.name and product.source_name is None:
+            product.source_name = line.name
         if changed:
             stats.updated += 1
         else:
@@ -186,7 +189,11 @@ def rename_product(db: Session, product: Product, raw_name: str, actor: User) ->
     name = " ".join(raw_name.split())
     if len(name) < 2:
         raise DomainError("Escribe el nombre del producto (al menos 2 caracteres).")
+    # Si coincide con el nombre del sistema, vuelve a seguir al Excel (no queda fijado).
+    locked = name != product.source_name
     if name == product.name:
+        product.name_locked = locked
+        db.flush()
         return product
     db.add(
         ProductNameChange(
@@ -198,6 +205,12 @@ def rename_product(db: Session, product: Product, raw_name: str, actor: User) ->
         )
     )
     product.name = name
-    product.name_locked = True
+    product.name_locked = locked
     db.flush()
     return product
+
+
+def renamed_products(db: Session) -> list[Product]:
+    """Productos con el nombre corregido en la app (fijado frente a las cargas de Excel)."""
+    stmt = select(Product).where(Product.name_locked.is_(True)).order_by(Product.name)
+    return list(db.scalars(stmt))

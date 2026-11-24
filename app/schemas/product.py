@@ -10,6 +10,8 @@ class ProductOut(ApiModel):
     ean: str | None
     name: str
     name_locked: bool
+    # Último nombre que trajo el Excel; difiere de `name` cuando el admin lo corrigió.
+    source_name: str | None
     business_unit: str | None
     size: str | None
     color_code: str | None

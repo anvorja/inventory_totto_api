@@ -13,6 +13,12 @@ def search(db: DbSession, _: CurrentUser, q: str = "", limit: int = 20) -> list[
     return catalog.search_products(db, q, min(limit, 50))
 
 
+@router.get("/renamed", response_model=list[ProductOut])
+def renamed(db: DbSession, _: CurrentUser) -> list[Product]:
+    """Productos con el nombre corregido en la app, para revisarlos contra el sistema."""
+    return catalog.renamed_products(db)
+
+
 @router.get("/lookup/{code}", response_model=ProductOut)
 def lookup(code: str, db: DbSession, _: CurrentUser) -> Product:
     product = catalog.find_by_code(db, code)

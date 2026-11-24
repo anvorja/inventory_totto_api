@@ -1,4 +1,4 @@
-"""editar nombre de producto: nombre fijado e historial
+"""editar nombre de producto: nombre fijado, nombre del sistema e historial
 
 Revision ID: 8d3f2a6c4e91
 Revises: 5c1a9e7d2b40
@@ -25,6 +25,10 @@ def upgrade() -> None:
         'products',
         sa.Column('name_locked', sa.Boolean(), server_default=sa.false(), nullable=False),
     )
+    # Último nombre que trajo el Excel. Los nombres actuales vienen de los Excel, salvo los
+    # registrados a mano durante un conteo (que no tienen nombre del sistema).
+    op.add_column('products', sa.Column('source_name', sa.String(length=200), nullable=True))
+    op.execute("UPDATE products SET source_name = name WHERE source <> 'manual'")
     op.create_table(
         'product_name_changes',
         sa.Column('id', sa.Integer(), nullable=False),
@@ -56,4 +60,5 @@ def downgrade() -> None:
     """Downgrade schema."""
     op.drop_index(op.f('ix_product_name_changes_product_id'), table_name='product_name_changes')
     op.drop_table('product_name_changes')
+    op.drop_column('products', 'source_name')
     op.drop_column('products', 'name_locked')
